@@ -1,0 +1,25 @@
+# Segredos e ambiente local: nunca versionar
+.env
+.env.*
+!.env.example
+
+# Dependências e resultado de build
+node_modules/
+dist/
+coverage/
+
+# Dados de desenvolvimento local (os dados reais ficam fora da main, no próprio GitHub)
+.local-data/
+data-store/
+
+# Reservado caso um banco Supabase seja adotado no futuro
+.supabase/
+
+# Arquivos temporários e logs locais
+tmp/
+temp/
+*.tmp
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
