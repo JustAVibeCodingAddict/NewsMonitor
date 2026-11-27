@@ -1,0 +1,53 @@
+name: CI
+
+# Verificação automática: roda em todo pull request para a main
+# e em todo envio para a main. Não usa nenhuma credencial.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Permissão mínima: só ler o código.
+permissions:
+  contents: read
+
+# Num pull request, um novo envio cancela a verificação anterior.
+# Na main, nenhuma verificação é cancelada.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  ci:
+    name: CI
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Baixar o código
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Configurar o Node.js (versão do arquivo .nvmrc)
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Mostrar as versões em uso
+        run: |
+          node --version
+          npm --version
+
+      - name: Instalar as dependências (instalação limpa)
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Testes unitários
+        run: npm test
+
+      - name: Build
+        run: npm run build
