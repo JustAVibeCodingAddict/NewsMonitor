@@ -1,0 +1,6 @@
+{
+  "key": "schema_version",
+  "value": 1,
+  "description": "Versão do formato dos dados desta branch. Só muda junto com uma migração descrita em docs/data-model.md.",
+  "updated_at": "2026-11-28T07:36:24.438Z"
+}
