@@ -57,6 +57,7 @@ Por enquanto não há nada mais para executar. A aplicação e a verificação d
 ## Documentação
 
 - [Arquitetura](docs/architecture.md): como o sistema é dividido.
+- [Formato dos dados](docs/data-model.md): como os dados são guardados no GitHub.
 - [Operação](docs/operations.md): como rodar, verificar e diagnosticar problemas.
 - [Decisões](docs/decisions.md): o que foi decidido e por quê.
 - [Especificação da Fase 1](docs/implementation-phase-1.md): o que a fase atual precisa entregar.

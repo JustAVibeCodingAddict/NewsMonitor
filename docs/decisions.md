@@ -22,7 +22,7 @@ Cada decisão tem número, data, quem decidiu e o estado.
 
 **Consequências.**
 
-1. Os critérios de aceite F1-04 a F1-10 e F1-13 falam de banco de dados. Eles precisam de equivalentes, que serão apresentados ao dono do projeto antes de implementar. A versão aprovada será registrada aqui.
+1. Os critérios de aceite F1-04 a F1-09 e F1-13 falam de banco de dados. Os equivalentes foram aprovados pelo dono do projeto e estão na D-012.
 2. As Fases 2 a 8 têm migrações SQL, regras de acesso do banco (RLS) e funções de banco. A persistência de cada fase será adaptada e apresentada no plano daquela fase.
 3. Os Secrets `SUPABASE_URL` e `SUPABASE_SECRET_KEY` deixam de existir. A Fase 1 não precisa de nenhum Secret.
 
@@ -121,9 +121,120 @@ A versão do Node é registrada nos logs de duas formas: o passo "Mostrar as ver
 
 Num PR, um novo envio cancela a verificação anterior, o que economiza tempo. Na `main`, nenhuma verificação é cancelada, para que todo commit tenha o seu resultado.
 
+## D-012 — Critérios de aceite sem banco de dados
+
+- **Data:** 27/11/2026
+- **Decidido por:** dono do projeto (aprovou a proposta do Claude)
+- **Estado:** vale
+
+Sem o Supabase, sete critérios da seção 15 da especificação da Fase 1 não podem ser cumpridos ao pé da letra. Cada um ganhou um equivalente, aprovado pelo dono do projeto. Os outros onze (F1-01, 02, 03, 10, 11, 12, 14, 15, 16, 17 e 18) continuam como estão. O F1-03 passa a validar as variáveis do novo desenho (`NODE_ENV`, `LOG_LEVEL` e `DATA_DIR`), no lugar das do Supabase.
+
+| ID | Critério original | Critério aprovado | Evidência |
+| :--- | :--- | :--- | :--- |
+| F1-04 | Supabase conecta corretamente | O armazenamento funciona: grava, lê e apaga um registro de teste | `npm run storage:smoke`, no computador e no GitHub Actions (PR 3) |
+| F1-05 | Migração é versionada | O formato dos dados é versionado | `SCHEMA_VERSION`, `settings/schema_version.json`, [`data-model.md`](data-model.md) e `npm run storage:init` |
+| F1-06 | Três tabelas essenciais existem | Três coleções existem, com os campos da especificação | Esquemas, testes e o `storage:smoke`, que usa as três |
+| F1-07 | RLS está habilitado | Não se aplica, porque não há banco. Equivalente: só quem tem permissão grava nos dados | `main` protegida (D-014), permissões mínimas nos workflows e escrita isolada num job próprio (PR 3) |
+| F1-08 | Não há acesso público indevido | Os dados são públicos por natureza e nenhum segredo vai para eles | Proteção contra segredos (D-017), testes e varredura do histórico |
+| F1-09 | Execução é registrada no banco | Execução é registrada como arquivo na branch `data` | Arquivo criado por uma execução real no GitHub Actions |
+| F1-13 | Testes de integração passam | Testes de integração contra o sistema de arquivos real, mais uma execução real no GitHub Actions | `npm run test:integration` e CI (PR 3) |
+
+## D-013 — Os dados ficam na branch `data` (única exceção à regra "tudo por pull request")
+
+- **Data:** 27/11/2026 (aprovada); branch criada em 28/11/2026
+- **Decidido por:** dono do projeto
+- **Estado:** vale
+
+Os dados ficam numa branch separada chamada `data`, sem nenhum código. A `main` guarda só código e documentação.
+
+**A exceção.** A regra de trabalho diz "nenhum push direto na ramificação principal". Ela continua valendo para a `main`. A `data` não é a ramificação principal e recebe dados gerados automaticamente, uma gravação por execução. Exigir um pull request para cada execução diária seria inviável. Por isso os workflows gravam direto na `data`. É a **única** exceção.
+
+**Como a gravação é protegida.** O workflow usa um job só para gravar, com permissão de escrita e sem rodar o código do projeto. O job que roda o código só tem permissão de leitura (PR 3).
+
+**Sugestão opcional** (o dono do projeto decide): em *Settings → Rules*, bloquear a exclusão e o force push na `data`, deixando os envios normais liberados para os workflows.
+
+## D-014 — Proteção da `main`
+
+- **Data:** 27/11/2026
+- **Decidido por:** dono do projeto (configurou no GitHub); verificado pelo Claude pela API do GitHub
+- **Estado:** vale
+
+Configuração ativa na `main`:
+
+- pull request obrigatório, com 0 aprovações exigidas (o dono do projeto é a única pessoa);
+- verificação `CI` obrigatória e verde antes de juntar;
+- "Do not allow bypassing the above settings": vale também para administradores;
+- force push e exclusão da branch bloqueados.
+
+Para mudar ou desfazer: *Settings → Branches*, editar a regra da `main`. Sem aprovações obrigatórias, o dono do projeto pode juntar o próprio PR. O Claude só junta depois que o CI fica verde (D-004).
+
+## D-015 — Formato dos arquivos de dados
+
+- **Data:** 28/11/2026
+- **Decidido por:** Claude
+- **Estado:** vale
+
+- Um arquivo JSON por registro. O nome do arquivo é a chave do registro, por isso não existem duas chaves iguais.
+- JSON com recuo de 2 espaços e quebra de linha no final; datas em UTC terminadas em `Z`; campos na ordem das tabelas. O mesmo registro gera sempre o mesmo texto, e o histórico do Git mostra só o que mudou.
+- Pastas: `runs/AAAA/MM/DD/`, `sources/<2 caracteres do SHA-256 do domínio>/` e `settings/`. Cada pasta fica bem abaixo dos 3.000 itens que o GitHub recomenda.
+- Os registros guardados são estritos: campo desconhecido ou faltando é erro.
+
+**Alternativas descartadas.** Um arquivo só por coleção (uma linha JSON por registro): duas gravações ao mesmo tempo conflitariam e o arquivo cresceria sem limite. Um arquivo SQLite no repositório: é binário, não mostra diferenças no GitHub e também conflita.
+
+O formato completo está em [`data-model.md`](data-model.md).
+
+## D-016 — Identificação das execuções
+
+- **Data:** 28/11/2026
+- **Decidido por:** Claude
+- **Estado:** vale (o cálculo do `id` entra no PR 3)
+
+Num banco de dados, a chave única impede registrar duas vezes a mesma execução. Sem banco, a solução é esta:
+
+- Foi acrescentado o campo `external_run_id` em `runs`. **Ele não existe na tabela `system_runs` da especificação.** Guarda o identificador da execução de fora, por exemplo `github-actions:<run_id>:<tentativa>`.
+- Quando ele é informado, o `id` é um UUID versão 5 calculado a partir dele. A mesma execução externa sempre gera o mesmo `id`, portanto o mesmo arquivo, e o sistema percebe a repetição ao ver que o arquivo já existe.
+- Sem `external_run_id`, o `id` é um UUID aleatório.
+- O estado de uma execução só avança pelas transições permitidas. Ao gravar, o sistema lê o arquivo que já existe e confere a transição. Execução terminada não muda mais.
+
+## D-017 — Proteção contra segredos nos dados
+
+- **Data:** 28/11/2026
+- **Decidido por:** Claude
+- **Estado:** vale
+
+Como o repositório é público, um segredo gravado nos dados ficaria exposto para sempre (o histórico do Git guarda tudo). O código em `src/core/secrets.ts` barra o problema antes de gravar:
+
+- reconhece formatos conhecidos de credenciais (Supabase, GitHub, AWS, Google, Slack, `sk-`, JWT, chave privada, `Bearer` e endereços com usuário e senha);
+- desconfia de qualquer texto dentro de um campo cujo nome sugere uma credencial (`senha`, `token`, `api_key`...);
+- recusa estruturas fundas demais para verificar (mais de 32 níveis);
+- nunca repete o valor encontrado: a mensagem diz só o caminho e o motivo;
+- usa expressões com limites de tamanho, para continuar rápido mesmo com textos enormes.
+
+**Limite conhecido.** Nenhuma detecção é perfeita. Só texto é verificado (um número dentro de um campo com nome de credencial passa), e um segredo num formato desconhecido também passa. É uma segunda barreira: a regra principal continua sendo nunca colocar segredo nos dados. A mesma verificação será usada nos logs (PR 3).
+
+Os testes montam os segredos falsos na hora, em pedaços, para que nenhum texto parecido com uma credencial real entre no repositório.
+
+## D-018 — Regras das fontes
+
+- **Data:** 28/11/2026
+- **Decidido por:** Claude
+- **Estado:** vale
+
+- Toda fonte nova começa como candidata (`candidate`), com avaliação pendente (`pending`), `is_primary_source` falso, `enabled` verdadeiro e zero falhas, como a especificação manda ("nada é tratado como confiável só por ter sido encontrado").
+- O domínio é a chave da fonte. Ele é normalizado: minúsculas, sem espaços nem ponto final, e acentos em punycode. O `www.` não é removido, porque pode ser outro site.
+- Não são aceitos domínios com `http://`, caminho, porta, usuário ou endereço IP, nem nomes de rede interna (`localhost`, `.local`, `.internal`, `.lan`...), porque o sistema nunca deve tentar acessar a rede interna. O limite é de 250 caracteres, para o nome do arquivo caber nos 255 que os sistemas de arquivos aceitam.
+- URLs: só `http` e `https`, até 2.048 caracteres, sem usuário e senha e sem parâmetros de credencial (`api_key`, `token`, `signature`...). Uma URL assim iria para o repositório público.
+
+## D-019 — Versão do formato dos dados
+
+- **Data:** 28/11/2026
+- **Decidido por:** Claude
+- **Estado:** vale (a comparação automática entra no PR 3)
+
+É o equivalente das "migrações" do banco de dados. A versão atual é 1. Ela fica no código (`SCHEMA_VERSION`) e nos dados (`settings/schema_version.json`). A verificação de saúde (PR 3) compara as duas e falha se forem diferentes. O procedimento para mudar o formato está na seção 8 de [`data-model.md`](data-model.md). O conteúdo inicial da branch `data` é criado por `npm run storage:init`.
+
 ---
 
 ## Pendências de decisão
 
-- **Proteção da `main`** (exigir PR e CI verde): sugerida ao dono do projeto, que faz a configuração no GitHub. Padrão proposto: ativar.
-- **Equivalentes dos critérios de aceite sem banco de dados** (ver D-001): aguardam aprovação do dono do projeto.
+Nenhuma no momento.
