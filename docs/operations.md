@@ -45,6 +45,34 @@ A verificação de saúde diária (06:17 UTC, que é 03:17 no horário de Brasí
 | `npm ci` reclama do `package-lock.json` | O arquivo não combina com o `package.json`. Refazer com `npm install` e enviar os dois arquivos |
 | Teste falha só no GitHub | Comparar a versão do Node (aparece no começo do log) com a usada no seu computador |
 
-## 7. Recuperação do armazenamento — em breve
+## 7. Dados: como ver, e como recuperar
 
-Será descrita junto com a definição dos dados (Tarefa 3).
+Os dados ficam na branch `data` (veja [`data-model.md`](data-model.md)).
+
+**Ver os dados.** No GitHub, troque a branch de `main` para `data` no menu de branches e navegue pelas pastas `runs/`, `sources/` e `settings/`. No computador:
+
+```bash
+git clone --branch data --single-branch https://github.com/JustAVibeCodingAddict/NewsMonitor.git dados
+```
+
+**Cópia de segurança.** Cada gravação é um commit na branch `data`, então o histórico do Git guarda tudo. Um clone da branch (comando acima) é uma cópia completa que fica no seu computador.
+
+**Recriar a branch `data` vazia** (só se ela for apagada por engano e nenhum clone tiver os dados). Precisa de Git 2.42 ou mais novo. Rode dentro do clone do projeto, na pasta onde está o código:
+
+```bash
+git fetch origin
+git worktree add --orphan -b data ../NewsMonitor-dados   # cria uma branch nova, sem histórico
+npm run storage:init -- ../NewsMonitor-dados             # cria README, pastas e schema_version.json
+cd ../NewsMonitor-dados
+git add -A
+git commit -m "Dados: estrutura inicial"
+git push origin data
+cd -
+git worktree remove ../NewsMonitor-dados
+```
+
+Isso recria só a estrutura. Os dados antigos só voltam se alguém tiver um clone com a branch: nesse caso, basta rodar `git push origin data` a partir dele.
+
+**Se a versão do formato não bater** (a verificação de saúde avisa que o `schema_version.json` é diferente do código): siga a seção 8 de [`data-model.md`](data-model.md).
+
+**Sugestão opcional de proteção.** Em *Settings → Rules*, bloquear a exclusão e o force push da branch `data`, deixando os envios normais liberados para os workflows (D-013).
